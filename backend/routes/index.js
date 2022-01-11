@@ -1,43 +1,59 @@
-var express = require('express');
+var express = require("express");
 var router = express.Router();
+var bcrypt = require("bcrypt");
+var uid2 = require("uid2");
 
-let userModel = require('../models/users');
+let userModel = require("../models/users");
 
 /* GET home page. */
-router.get('/', function(req, res, next) {
-  res.render('index', { title: 'Express' });
+router.get("/", function (req, res, next) {
+  res.render("index", { title: "Express" });
 });
 
-router.post('/sign-up', async(req, res, next) => {
+router.post("/sign-up", async (req, res, next) => {
+  let hash = bcrypt.hashSync(req.body.passwordFromFront, 10);
 
-  let newUser = new userModel ({
+  let newUser = new userModel({
     userName: req.body.usernameFromFront,
     mail: req.body.emailFromFront,
-    pwd: req.body.passwordFromFront,
+    pwd: hash,
+    token: uid2(32),
+  });
 
-  })
+  let result = false;
+  let userExist = await userModel.findOne({ mail: req.body.emailFromFront });
 
-  let result = false
-  let userExist = await userModel.findOne({mail: req.body.emailFromFront});
-
-  if(newUser.userName && newUser.mail && newUser.pwd  &&  !userExist){
-     await newUser.save();
-    result = true
-  } 
-
-  res.json({result});
+  if (newUser.userName && newUser.mail && newUser.pwd && !userExist) {
+    await newUser.save();
+    result = true;
+    res.json({ result, token: newUser.token });
+  } else {
+    result = false;
+    res.json({});
+  }
 });
 
-router.post('/sign-in', async(req, res, next) => {
+router.post("/sign-in", async (req, res, next) => {
+  let userExist = await userModel.findOne({
+    mail: req.body.emailFromFront,
+  });
 
-  let userExist = await userModel.findOne({mail: req.body.emailFromFront, pwd:req.body.passwordFromFront });
+  let password = req.body.passwordFromFront;
 
-  let result = false
+  let result = false;
 
-  if(req.body.emailFromFront && req.body.passwordFromFront && userExist) {
-    result = true
+  if (userExist) {
+    if (bcrypt.compareSync(password, userExist.pwd)) {
+      result = true;
+      res.json({ result, token: userExist.token });
+    } else {
+      result = false;
+      res.json({ result });
+    }
+  } else {
+    result = false;
+    res.json({ result });
   }
-  res.json({result});
 });
 
 module.exports = router;
